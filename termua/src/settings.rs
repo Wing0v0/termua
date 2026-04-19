@@ -589,7 +589,6 @@ impl SettingsFile {
         set_theme_mode(self.appearance.theme, window, cx);
     }
 
-
     pub fn apply_lock_screen_settings(&self, cx: &mut App) {
         if cx.has_global::<LockScreenSettings>() {
             *cx.global_mut::<LockScreenSettings>() = self.lock_screen.clone();
@@ -820,47 +819,15 @@ fn apply_terminal_binding<A: gpui::Action + Default + 'static>(
     *previous_override = next_override;
 }
 
-pub fn settings_json_path() -> PathBuf {
-    #[cfg(test)]
-    if let Some(path) = SETTINGS_JSON_PATH_OVERRIDE.with(|slot| slot.borrow().clone()) {
-        return path;
-    }
-
-    #[cfg(target_os = "windows")]
-    {
-        if let Ok(appdata) = std::env::var("APPDATA") {
-            return PathBuf::from(appdata).join("termua").join("settings.json");
-        }
-    }
-
-    #[cfg(target_os = "macos")]
-    {
-        if let Some(home) = home::home_dir() {
-            return home
-                .join("Library")
-                .join("Application Support")
-                .join("termua")
-                .join("settings.json");
-        }
-    }
-
-    // Linux and fallback for unknown platforms.
-    if let Ok(xdg) = std::env::var("XDG_CONFIG_HOME") {
-        return PathBuf::from(xdg).join("termua").join("settings.json");
-    }
-
-    home::home_dir()
-        .unwrap_or_else(|| PathBuf::from("."))
-        .join(".config")
-        .join("termua")
-        .join("settings.json")
+pub fn settings_dir_path() -> PathBuf {
+    return std::env::current_dir()
+        .expect("Failed to get current directory")
+        .join("app_data");
 }
 
-pub fn settings_dir_path() -> PathBuf {
-    settings_json_path()
-        .parent()
-        .map(PathBuf::from)
-        .unwrap_or_else(|| PathBuf::from("."))
+pub fn settings_json_path() -> PathBuf {
+    return settings_dir_path()
+        .join("settings.json");
 }
 
 pub fn load_settings_from_disk() -> anyhow::Result<SettingsFile> {
