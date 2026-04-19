@@ -54,18 +54,6 @@ pub fn delete_ssh_password(session_id: i64) -> anyhow::Result<()> {
     delete_os(Secret::ssh_password(session_id))
 }
 
-pub fn store_zeroclaw_api_key(api_key: &str) -> anyhow::Result<()> {
-    store_os(Secret::named("zeroclaw_api_key", "default"), api_key)
-}
-
-pub fn load_zeroclaw_api_key() -> anyhow::Result<Option<String>> {
-    load_os(Secret::named("zeroclaw_api_key", "default"))
-}
-
-pub fn delete_zeroclaw_api_key() -> anyhow::Result<()> {
-    delete_os(Secret::named("zeroclaw_api_key", "default"))
-}
-
 fn store_os(secret: Secret<'_>, value: &str) -> anyhow::Result<()> {
     #[cfg(target_os = "windows")]
     {

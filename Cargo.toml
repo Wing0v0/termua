@@ -7,8 +7,6 @@ members = [
     "crates/gpui_sftp",
     "crates/gpui_term",
     "crates/gpui_transfer",
-    "crates/termua_relay",
-    "crates/termua_zeroclaw",
     "crates/wezterm-ssh",
     "crates/menubar",
     "termua",
@@ -28,7 +26,6 @@ keywords = ["terminal", "gpui"]
 [workspace.dependencies]
 alacritty_terminal = { path = "crates/alacritty_terminal" }
 gpui_common = { path = "crates/gpui_common" }
-termua_zeroclaw = { path = "crates/termua_zeroclaw" }
 termua_relay = { path = "crates/termua_relay" }
 anyhow = "1"
 async-tungstenite = "0.34"

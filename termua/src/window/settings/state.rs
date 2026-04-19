@@ -14,7 +14,6 @@ use gpui_component::{
 };
 use gpui_term::SshBackend;
 use rust_i18n::t;
-use termua_zeroclaw::Client as ZeroclawClient;
 
 use super::SettingsNavSection;
 use crate::settings::{Language, SettingsFile, TerminalBackend, load_settings_from_disk};
@@ -247,39 +246,12 @@ const SETTINGS_PAGE_SPECS: &[SettingsPageSpec] = &[
         is_sidebar_item: true,
     },
     SettingsPageSpec {
-        section: SettingsNavSection::Terminal,
-        item_label_key: "Settings.Terminal.Sharing",
-        page: SettingsPage::TerminalSharing,
-        nav_item_id: "nav.page.terminal.sharing",
-        heading_key: "Settings.Terminal.Sharing",
-        hint_key: None,
-        is_sidebar_item: true,
-    },
-    SettingsPageSpec {
-        section: SettingsNavSection::Recording,
-        item_label_key: "Settings.Recording.CastRecording",
-        page: SettingsPage::RecordingCast,
-        nav_item_id: "nav.page.recording.cast",
-        heading_key: "Settings.Recording.CastRecording",
-        hint_key: None,
-        is_sidebar_item: true,
-    },
-    SettingsPageSpec {
         section: SettingsNavSection::Logging,
         item_label_key: "Settings.Logging.General",
         page: SettingsPage::Logging,
         nav_item_id: "nav.page.logging.general",
         heading_key: "Settings.Logging.Logging",
         hint_key: Some(LOGGING_PAGE_HINT_KEY),
-        is_sidebar_item: true,
-    },
-    SettingsPageSpec {
-        section: SettingsNavSection::Assistant,
-        item_label_key: "Settings.Assistant.ZeroClaw",
-        page: SettingsPage::Assistant,
-        nav_item_id: "nav.page.assistant.zeroclaw",
-        heading_key: "Settings.Assistant.Assistant",
-        hint_key: Some(ASSISTANT_PAGE_HINT_KEY),
         is_sidebar_item: true,
     },
     SettingsPageSpec {
@@ -788,32 +760,7 @@ pub struct SettingsWindow {
         Entity<SelectState<SearchableVec<SshBackendSelectItem>>>,
     pub(super) terminal_keybinding_focus: [FocusHandle; 10],
     pub(super) logging_path_input: Entity<InputState>,
-    pub(super) sharing_relay_url_input: Entity<InputState>,
-    pub(super) recording_playback_speed_select:
-        Entity<SelectState<SearchableVec<PlaybackSpeedSelectItem>>>,
     pub(super) static_suggestions_reload_in_flight: bool,
-
-    // Assistant (ZeroClaw) page inputs
-    pub(super) assistant_temperature_input: Entity<InputState>,
-    pub(super) assistant_api_url_input: Entity<InputState>,
-    pub(super) assistant_api_path_input: Entity<InputState>,
-    pub(super) assistant_provider_timeout_input: Entity<InputState>,
-    pub(super) assistant_extra_headers_input: Entity<InputState>,
-    pub(super) assistant_api_key_input: Entity<InputState>,
-    pub(super) assistant_provider_select:
-        Entity<SelectState<SearchableVec<AssistantProviderSelectItem>>>,
-
-    pub(super) assistant_model_select: Entity<SelectState<SearchableVec<AssistantModelSelectItem>>>,
-    pub(super) assistant_model_fetch_in_flight: bool,
-    pub(super) assistant_model_fetch_error: Option<gpui::SharedString>,
-    pub(super) assistant_model_candidates: Vec<gpui::SharedString>,
-
-    pub(super) assistant_service_in_flight: bool,
-    pub(super) assistant_service_alive: Option<bool>,
-    pub(super) assistant_service_error: Option<gpui::SharedString>,
-    pub(super) assistant_gateway_endpoint: Option<termua_zeroclaw::GatewayEndpoint>,
-    pub(super) assistant_gateway_handle: Option<termua_zeroclaw::GatewayHandle>,
-    pub(super) assistant_service_bootstrap_done: bool,
 
     pub(super) _subscriptions: Vec<Subscription>,
 }
@@ -965,171 +912,6 @@ impl SettingsWindow {
         ));
     }
 
-    fn subscribe_assistant_parsed_input<T, F>(
-        &mut self,
-        input: &Entity<InputState>,
-        field_name: &'static str,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-        apply: F,
-    ) where
-        T: std::str::FromStr + 'static,
-        <T as std::str::FromStr>::Err: std::fmt::Display,
-        F: Fn(&mut Self, Option<T>, &mut Window, &mut Context<Self>) + 'static,
-    {
-        self.subscribe_trimmed_input(
-            input,
-            window,
-            cx,
-            |ev| matches!(ev, InputEvent::Blur | InputEvent::PressEnter { .. }),
-            move |this, value, window, cx| {
-                if value.is_empty() {
-                    apply(this, None, window, cx);
-                    return;
-                }
-
-                match value.parse::<T>() {
-                    Ok(parsed) => apply(this, Some(parsed), window, cx),
-                    Err(err) => {
-                        log::warn!("invalid assistant {field_name} {value:?}: {err}");
-                        window.refresh();
-                    }
-                }
-            },
-        );
-    }
-
-    fn save_assistant_settings(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        self.settings.apply_assistant_settings(cx);
-        self.save_only(window, cx);
-    }
-
-    fn assistant_provider_select(
-        settings: &SettingsFile,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) -> gpui::Entity<SelectState<SearchableVec<AssistantProviderSelectItem>>> {
-        let providers = ZeroclawClient::list_providers();
-        let provider_items: Vec<AssistantProviderSelectItem> = providers
-            .into_iter()
-            .map(|p| {
-                let name: gpui::SharedString = p.name.clone().into();
-                AssistantProviderSelectItem::new(
-                    name.clone(),
-                    if p.display_name.trim().is_empty() {
-                        name
-                    } else {
-                        p.display_name.into()
-                    },
-                )
-            })
-            .collect();
-
-        let provider_selected_index =
-            Self::trimmed_nonempty(settings.assistant.provider.as_deref()).and_then(|provider| {
-                provider_items
-                    .iter()
-                    .position(|item| item.name.as_ref() == provider.as_str())
-            });
-
-        cx.new(|cx| {
-            SelectState::new(
-                SearchableVec::new(provider_items),
-                provider_selected_index.map(Self::row_index),
-                window,
-                cx,
-            )
-            .searchable(true)
-        })
-    }
-
-    fn assistant_model_select(
-        settings: &SettingsFile,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) -> gpui::Entity<SelectState<SearchableVec<AssistantModelSelectItem>>> {
-        let mut model_items = vec![AssistantModelSelectItem::default_item()];
-        let model_selected_row = Self::trimmed_nonempty(settings.assistant.model.as_deref())
-            .map(|model| {
-                model_items.push(AssistantModelSelectItem::for_model(model.into()));
-                1
-            })
-            .or(Some(0));
-
-        cx.new(|cx| {
-            SelectState::new(
-                SearchableVec::new(model_items),
-                model_selected_row.map(Self::row_index),
-                window,
-                cx,
-            )
-            .searchable(true)
-        })
-    }
-
-    fn init_assistant_controls(
-        settings: &SettingsFile,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) -> AssistantControlsInit {
-        let assistant_provider_select = Self::assistant_provider_select(settings, window, cx);
-        let assistant_model_select = Self::assistant_model_select(settings, window, cx);
-
-        let assistant_temperature_input = Self::new_input_with_initial(
-            window,
-            cx,
-            t!("Settings.Assistant.TemperaturePlaceholder").to_string(),
-            settings.assistant.temperature,
-        );
-        let assistant_api_url_input = Self::new_input_with_initial(
-            window,
-            cx,
-            t!("Settings.Assistant.ApiUrlPlaceholder").to_string(),
-            Self::trimmed_nonempty(settings.assistant.api_url.as_deref()),
-        );
-        let assistant_api_path_input = Self::new_input_with_initial(
-            window,
-            cx,
-            t!("Settings.Assistant.ApiPathPlaceholder").to_string(),
-            Self::trimmed_nonempty(settings.assistant.api_path.as_deref()),
-        );
-        let assistant_provider_timeout_input = Self::new_input_with_initial(
-            window,
-            cx,
-            t!("Settings.Assistant.TimeoutPlaceholder").to_string(),
-            settings.assistant.provider_timeout_secs,
-        );
-
-        let assistant_extra_headers_input = Self::new_configured_input(
-            window,
-            cx,
-            t!("Settings.Assistant.ExtraHeadersPlaceholder").to_string(),
-            |input| input.auto_grow(2, 6),
-        );
-        if !settings.assistant.extra_headers.is_empty() {
-            let s = assistant_headers_to_text(&settings.assistant.extra_headers);
-            Self::set_input_value(&assistant_extra_headers_input, &s, window, cx);
-        }
-
-        let assistant_api_key_input = Self::new_configured_input(
-            window,
-            cx,
-            t!("Settings.Assistant.ApiKeyPlaceholder").to_string(),
-            |input| input.masked(true),
-        );
-
-        AssistantControlsInit {
-            assistant_temperature_input,
-            assistant_api_url_input,
-            assistant_api_path_input,
-            assistant_provider_timeout_input,
-            assistant_extra_headers_input,
-            assistant_api_key_input,
-            assistant_provider_select,
-            assistant_model_select,
-        }
-    }
-
     pub fn open(app: &mut App) -> anyhow::Result<gpui::WindowHandle<gpui_component::Root>> {
         use gpui_component::{Root, TitleBar};
 
@@ -1177,44 +959,6 @@ impl SettingsWindow {
             t!("Settings.Logging.PathPlaceholder").to_string(),
             Self::trimmed_nonempty(settings.logging.path.as_deref()),
         )
-    }
-
-    fn sharing_relay_url_input(
-        settings: &SettingsFile,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) -> gpui::Entity<InputState> {
-        Self::new_input_with_initial(
-            window,
-            cx,
-            t!("Settings.Sharing.RelayUrlPlaceholder").to_string(),
-            Self::trimmed_nonempty(settings.sharing.relay_url.as_deref()),
-        )
-    }
-
-    fn recording_playback_speed_select(
-        settings: &SettingsFile,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) -> gpui::Entity<SelectState<SearchableVec<PlaybackSpeedSelectItem>>> {
-        let current = settings.recording.playback_speed_or_default();
-        let preset_speeds = [0.5, 1.0, 1.5, 2.0, 4.0];
-        let mut items: Vec<PlaybackSpeedSelectItem> = preset_speeds
-            .into_iter()
-            .map(PlaybackSpeedSelectItem::new)
-            .collect();
-
-        if !items.iter().any(|item| item.speed == current) {
-            items.push(PlaybackSpeedSelectItem::new(current));
-            items.sort_by(|a, b| {
-                a.speed
-                    .partial_cmp(&b.speed)
-                    .unwrap_or(std::cmp::Ordering::Equal)
-            });
-        }
-
-        let selected_row = items.iter().position(|item| item.speed == current);
-        Self::new_select(window, cx, items, selected_row)
     }
 
     fn font_family_select(
@@ -1296,21 +1040,8 @@ impl SettingsWindow {
 
         let lock_overlay = crate::lock_screen::overlay::LockOverlayState::new(window, cx);
         let logging_path_input = Self::logging_path_input(&settings, window, cx);
-        let sharing_relay_url_input = Self::sharing_relay_url_input(&settings, window, cx);
-        let recording_playback_speed_select =
-            Self::recording_playback_speed_select(&settings, window, cx);
 
         let static_suggestions_reload_in_flight = false;
-        let AssistantControlsInit {
-            assistant_temperature_input,
-            assistant_api_url_input,
-            assistant_api_path_input,
-            assistant_provider_timeout_input,
-            assistant_extra_headers_input,
-            assistant_api_key_input,
-            assistant_provider_select,
-            assistant_model_select,
-        } = Self::init_assistant_controls(&settings, window, cx);
 
         let font_family_select = Self::font_family_select(&settings, window, cx);
         let terminal_default_backend_select = Self::terminal_backend_select(&settings, window, cx);
@@ -1337,26 +1068,7 @@ impl SettingsWindow {
             terminal_ssh_backend_select,
             terminal_keybinding_focus,
             logging_path_input,
-            sharing_relay_url_input,
-            recording_playback_speed_select,
             static_suggestions_reload_in_flight,
-            assistant_temperature_input,
-            assistant_api_url_input,
-            assistant_api_path_input,
-            assistant_provider_timeout_input,
-            assistant_extra_headers_input,
-            assistant_api_key_input,
-            assistant_provider_select,
-            assistant_model_select,
-            assistant_model_fetch_in_flight: false,
-            assistant_model_fetch_error: None,
-            assistant_model_candidates: Vec::new(),
-            assistant_service_in_flight: false,
-            assistant_service_alive: None,
-            assistant_service_error: None,
-            assistant_gateway_endpoint: None,
-            assistant_gateway_handle: None,
-            assistant_service_bootstrap_done: false,
             _subscriptions: Vec::new(),
         };
 
@@ -1368,9 +1080,6 @@ impl SettingsWindow {
     fn install_subscriptions(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.install_search_subscription(window, cx);
         self.install_logging_path_subscription(window, cx);
-        self.install_recording_subscriptions(window, cx);
-        self.install_sharing_subscriptions(window, cx);
-        self.install_assistant_subscriptions(window, cx);
         self.install_terminal_subscriptions(window, cx);
         self.install_lock_state_subscription(window, cx);
         self.install_language_settings_subscription(window, cx);
@@ -1396,180 +1105,6 @@ impl SettingsWindow {
             |this, value, window, cx| {
                 this.settings.logging.path = value;
                 this.save_only(window, cx);
-            },
-        );
-    }
-
-    fn install_recording_subscriptions(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let recording_playback_speed_select = self.recording_playback_speed_select.clone();
-        self.subscribe_select_confirm(
-            &recording_playback_speed_select,
-            window,
-            cx,
-            |this, speed, window, cx| {
-                this.settings.recording.playback_speed = *speed;
-                this.apply_and_save(window, cx);
-            },
-        );
-    }
-
-    fn install_sharing_subscriptions(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let sharing_relay_url_input = self.sharing_relay_url_input.clone();
-        self.subscribe_change_input(
-            &sharing_relay_url_input,
-            window,
-            cx,
-            |this, value, window, cx| {
-                this.settings.sharing.relay_url = value;
-
-                if cx.has_global::<crate::settings::SharingSettings>() {
-                    *cx.global_mut::<crate::settings::SharingSettings>() =
-                        this.settings.sharing.clone();
-                } else {
-                    cx.set_global(this.settings.sharing.clone());
-                }
-
-                this.save_only(window, cx);
-            },
-        );
-    }
-
-    fn install_assistant_subscriptions(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        self.install_assistant_provider_subscription(window, cx);
-        self.install_assistant_model_subscription(window, cx);
-        self.install_assistant_text_input_subscriptions(window, cx);
-        self.install_assistant_numeric_input_subscriptions(window, cx);
-        self.install_assistant_headers_subscription(window, cx);
-    }
-
-    fn install_assistant_provider_subscription(
-        &mut self,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        let assistant_provider_select = self.assistant_provider_select.clone();
-        self.subscribe_select_confirm(
-            &assistant_provider_select,
-            window,
-            cx,
-            |this, provider, window, cx| {
-                let provider = provider.to_string();
-                this.settings.assistant.provider = Some(provider);
-                // Provider change invalidates the prior model selection & cached model list.
-                this.settings.assistant.model = None;
-                this.assistant_model_candidates.clear();
-                this.assistant_model_fetch_error = None;
-                this.assistant_model_select.update(cx, |select, cx| {
-                    select.set_items(
-                        SearchableVec::new(vec![AssistantModelSelectItem::default_item()]),
-                        window,
-                        cx,
-                    );
-                    select.set_selected_index(Some(IndexPath::default().row(0)), window, cx);
-                });
-                this.save_assistant_settings(window, cx);
-                cx.notify();
-            },
-        );
-    }
-
-    fn install_assistant_model_subscription(
-        &mut self,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        let assistant_model_select = self.assistant_model_select.clone();
-        self.subscribe_select_confirm(
-            &assistant_model_select,
-            window,
-            cx,
-            |this, model, window, cx| {
-                let model = model.to_string();
-                this.settings.assistant.model = (!model.trim().is_empty()).then_some(model);
-                this.save_assistant_settings(window, cx);
-                cx.notify();
-            },
-        );
-    }
-
-    fn install_assistant_text_input_subscriptions(
-        &mut self,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        let assistant_api_url_input = self.assistant_api_url_input.clone();
-        self.subscribe_change_input(
-            &assistant_api_url_input,
-            window,
-            cx,
-            |this, value, window, cx| {
-                this.settings.assistant.api_url = value;
-                this.save_assistant_settings(window, cx);
-            },
-        );
-
-        let assistant_api_path_input = self.assistant_api_path_input.clone();
-        self.subscribe_change_input(
-            &assistant_api_path_input,
-            window,
-            cx,
-            |this, value, window, cx| {
-                this.settings.assistant.api_path = value;
-                this.save_assistant_settings(window, cx);
-            },
-        );
-    }
-
-    fn install_assistant_numeric_input_subscriptions(
-        &mut self,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        let assistant_temperature_input = self.assistant_temperature_input.clone();
-        self.subscribe_assistant_parsed_input::<f64, _>(
-            &assistant_temperature_input,
-            "temperature",
-            window,
-            cx,
-            |this, value, window, cx| {
-                this.settings.assistant.temperature = value;
-                this.save_assistant_settings(window, cx);
-            },
-        );
-
-        let assistant_provider_timeout_input = self.assistant_provider_timeout_input.clone();
-        self.subscribe_assistant_parsed_input::<u64, _>(
-            &assistant_provider_timeout_input,
-            "timeout_secs",
-            window,
-            cx,
-            |this, value, window, cx| {
-                this.settings.assistant.provider_timeout_secs = value;
-                this.save_assistant_settings(window, cx);
-            },
-        );
-    }
-
-    fn install_assistant_headers_subscription(
-        &mut self,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        let assistant_extra_headers_input = self.assistant_extra_headers_input.clone();
-        self.subscribe_trimmed_input(
-            &assistant_extra_headers_input,
-            window,
-            cx,
-            |ev| matches!(ev, InputEvent::Blur),
-            |this, value, window, cx| match parse_assistant_headers(&value) {
-                Ok(headers) => {
-                    this.settings.assistant.extra_headers = headers;
-                    this.save_assistant_settings(window, cx);
-                }
-                Err(err) => {
-                    log::warn!("invalid assistant extra headers: {err:#}");
-                    window.refresh();
-                }
             },
         );
     }
@@ -1700,35 +1235,5 @@ impl SelectItem for FontFamilySelectItem {
 
     fn value(&self) -> &Self::Value {
         &self.name
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use std::collections::HashSet;
-
-    use super::*;
-
-    #[test]
-    fn settings_page_specs_have_unique_nav_ids() {
-        let ids: Vec<&'static str> = SETTINGS_PAGE_SPECS.iter().map(|s| s.nav_item_id).collect();
-        let unique: HashSet<&'static str> = ids.iter().copied().collect();
-        assert_eq!(ids.len(), unique.len(), "duplicate nav_item_id in specs");
-    }
-
-    #[test]
-    fn settings_page_specs_round_trip_between_page_and_nav_id() {
-        for spec in SETTINGS_PAGE_SPECS {
-            assert_eq!(nav_tree_item_id_for_page(spec.page), spec.nav_item_id);
-            assert_eq!(page_for_nav_tree_item_id(spec.nav_item_id), Some(spec.page));
-        }
-    }
-
-    #[test]
-    fn legacy_terminal_alias_nav_id_still_maps_to_terminal_page() {
-        assert_eq!(
-            page_for_nav_tree_item_id("nav.page.terminal.terminal"),
-            Some(SettingsPage::Terminal)
-        );
     }
 }

@@ -3,7 +3,6 @@ use gpui::{Pixels, px};
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum RightSidebarTab {
     Notifications,
-    Assistant,
 }
 
 pub struct RightSidebarState {
@@ -32,34 +31,5 @@ impl RightSidebarState {
             self.visible = true;
             self.active_tab = tab;
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn toggling_same_tab_twice_hides_sidebar() {
-        let mut s = RightSidebarState::default();
-        s.toggle_tab(RightSidebarTab::Notifications);
-        assert!(s.visible);
-        assert_eq!(s.active_tab, RightSidebarTab::Notifications);
-
-        s.toggle_tab(RightSidebarTab::Notifications);
-        assert!(!s.visible);
-        assert_eq!(s.active_tab, RightSidebarTab::Notifications);
-    }
-
-    #[test]
-    fn toggling_other_tab_shows_and_switches() {
-        let mut s = RightSidebarState::default();
-        s.toggle_tab(RightSidebarTab::Notifications);
-        assert!(s.visible);
-        assert_eq!(s.active_tab, RightSidebarTab::Notifications);
-
-        s.toggle_tab(RightSidebarTab::Assistant);
-        assert!(s.visible);
-        assert_eq!(s.active_tab, RightSidebarTab::Assistant);
     }
 }

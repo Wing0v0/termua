@@ -357,14 +357,6 @@ impl SettingsWindow {
             cx,
             |meta| meta.localized_title(),
             |meta| match meta.id {
-                "assistant.status" => self
-                    .assistant_service_error
-                    .as_ref()
-                    .map(ToString::to_string),
-                "assistant.model" => self
-                    .assistant_model_fetch_error
-                    .as_ref()
-                    .map(ToString::to_string),
                 _ => keybinding_warning_for_setting_id(
                     meta.id,
                     self.terminal_keybinding_value(meta.id),

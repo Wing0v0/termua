@@ -88,7 +88,6 @@ impl FootbarView {
         lock_enabled: bool,
         lock_tooltip: SharedString,
         messages_selected: bool,
-        assistant_selected: bool,
     ) -> gpui::AnyElement {
         h_flex()
             .items_center()
@@ -104,19 +103,6 @@ impl FootbarView {
                     .debug_selector(|| "termua-footbar-issues".to_string())
                     .on_click(|_, _, cx| {
                         cx.open_url("https://github.com/iamazy/termua/issues");
-                    }),
-            )
-            .child(
-                Button::new("termua-footbar-multi-exec-button")
-                    .xsmall()
-                    .compact()
-                    .ghost()
-                    .icon(Icon::default().path(icon_path))
-                    .tooltip(t!("Footbar.Tooltip.MultiExecute").to_string())
-                    .selected(enabled)
-                    .debug_selector(|| "termua-footbar-multi-exec".to_string())
-                    .on_click(|_, _, cx| {
-                        crate::menu::toggle_multi_exec(&crate::ToggleMultiExec, cx)
                     }),
             )
             .when(lock_enabled, |this| {
@@ -147,19 +133,6 @@ impl FootbarView {
                         crate::menu::toggle_messages_sidebar(&crate::ToggleMessagesSidebar, cx)
                     }),
             )
-            .child(
-                Button::new("termua-footbar-assistant-button")
-                    .xsmall()
-                    .compact()
-                    .ghost()
-                    .icon(Icon::default().path(TermuaIcon::Bot))
-                    .tooltip(t!("Footbar.Tooltip.Assistant").to_string())
-                    .selected(assistant_selected)
-                    .debug_selector(|| "termua-footbar-assistant".to_string())
-                    .on_click(|_, _, cx| {
-                        crate::menu::toggle_assistant_sidebar(&crate::ToggleAssistantSidebar, cx)
-                    }),
-            )
             .into_any_element()
     }
 }
@@ -184,7 +157,6 @@ impl Render for FootbarView {
         let sessions_visible = cx.global::<TermuaAppState>().sessions_sidebar_visible;
         let right = cx.global::<RightSidebarState>();
         let messages_selected = right.visible && right.active_tab == RightSidebarTab::Notifications;
-        let assistant_selected = right.visible && right.active_tab == RightSidebarTab::Assistant;
 
         let icon_path = Self::multi_exec_icon_path(enabled);
         let lock_state = cx.global::<lock_screen::LockState>();
@@ -212,7 +184,6 @@ impl Render for FootbarView {
             lock_enabled,
             lock_tooltip,
             messages_selected,
-            assistant_selected,
         );
 
         div()

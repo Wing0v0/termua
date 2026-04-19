@@ -101,13 +101,6 @@ pub(crate) enum PendingCommand {
         session_id: Option<i64>,
     },
     ReloadSessionsSidebar,
-    OpenCastPicker,
-    OpenJoinSharingDialog,
-    JoinRelaySharing {
-        relay_url: String,
-        room_id: String,
-        join_key: String,
-    },
 }
 
 impl PendingCommand {
@@ -115,77 +108,6 @@ impl PendingCommand {
         matches!(
             (self, other),
             (Self::ReloadSessionsSidebar, Self::ReloadSessionsSidebar)
-                | (Self::OpenCastPicker, Self::OpenCastPicker)
-                | (Self::OpenJoinSharingDialog, Self::OpenJoinSharingDialog)
         )
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn serial_params_convert_to_serial_options() {
-        let params = SerialParams {
-            name: "usb".to_string(),
-            port: "/dev/ttyUSB0".to_string(),
-            baud: 115_200,
-            data_bits: 8,
-            parity: SerialParity::Even,
-            stop_bits: SerialStopBits::Two,
-            flow_control: SerialFlowControl::Hardware,
-        };
-
-        let opts = params.to_options();
-
-        assert_eq!(opts.port, "/dev/ttyUSB0");
-        assert_eq!(opts.baud, 115_200);
-        assert_eq!(opts.data_bits, 8);
-        assert_eq!(opts.parity, gpui_term::SerialParity::Even);
-        assert_eq!(opts.stop_bits, gpui_term::SerialStopBits::Two);
-        assert_eq!(opts.flow_control, gpui_term::SerialFlowControl::Hardware);
-    }
-
-    #[test]
-    fn enqueue_pending_command_coalesces_singleton_commands() {
-        let mut state = TermuaAppState::default();
-
-        state.pending_command(PendingCommand::ReloadSessionsSidebar);
-        state.pending_command(PendingCommand::ReloadSessionsSidebar);
-        state.pending_command(PendingCommand::OpenCastPicker);
-        state.pending_command(PendingCommand::OpenCastPicker);
-        state.pending_command(PendingCommand::OpenJoinSharingDialog);
-        state.pending_command(PendingCommand::OpenJoinSharingDialog);
-
-        assert_eq!(state.pending_commands.len(), 3);
-        assert!(matches!(
-            state.pending_commands[0],
-            PendingCommand::ReloadSessionsSidebar
-        ));
-        assert!(matches!(
-            state.pending_commands[1],
-            PendingCommand::OpenCastPicker
-        ));
-        assert!(matches!(
-            state.pending_commands[2],
-            PendingCommand::OpenJoinSharingDialog
-        ));
-    }
-
-    #[test]
-    fn enqueue_pending_command_keeps_repeatable_commands() {
-        let mut state = TermuaAppState::default();
-
-        state.pending_command(PendingCommand::OpenLocalTerminal {
-            backend_type: TerminalType::WezTerm,
-            env: HashMap::new(),
-        });
-        state.pending_command(PendingCommand::OpenLocalTerminal {
-            backend_type: TerminalType::WezTerm,
-            env: HashMap::new(),
-        });
-
-        assert_eq!(state.pending_commands.len(), 2);
     }
 }

@@ -7,14 +7,13 @@ use gpui_dock::{Panel, PanelControl, PanelEvent};
 
 use crate::{
     globals::ensure_ctx_global,
-    panel::{assistant_panel::AssistantPanelView, message_panel::MessageCenterView},
+    panel::message_panel::MessageCenterView,
     right_sidebar::{RightSidebarState, RightSidebarTab},
 };
 
 pub struct RightSidebarView {
     focus_handle: FocusHandle,
     notifications: gpui::Entity<MessageCenterView>,
-    assistant: gpui::Entity<AssistantPanelView>,
     _subscriptions: Vec<Subscription>,
 }
 
@@ -31,7 +30,6 @@ impl RightSidebarView {
         ensure_ctx_global::<RightSidebarState, _>(cx);
 
         let notifications = cx.new(|cx| MessageCenterView::new(window, cx));
-        let assistant = cx.new(|cx| AssistantPanelView::new(window, cx));
 
         let subs = vec![
             cx.observe_global::<RightSidebarState>(|_, cx| cx.notify()),
@@ -41,7 +39,6 @@ impl RightSidebarView {
         Self {
             focus_handle: cx.focus_handle(),
             notifications,
-            assistant,
             _subscriptions: subs,
         }
     }
@@ -92,75 +89,6 @@ impl Render for RightSidebarView {
                     .min_h_0()
                     .child(self.notifications.clone())
                     .into_any_element(),
-                RightSidebarTab::Assistant => div()
-                    .flex_1()
-                    .min_h_0()
-                    .child(self.assistant.clone())
-                    .into_any_element(),
             })
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use gpui::{AvailableSpace, point, px, size};
-
-    use super::*;
-
-    fn init_test_app(app: &mut gpui::App) {
-        gpui_component::init(app);
-        gpui_term::init(app);
-        crate::settings::set_language(crate::settings::Language::English, app);
-        crate::assistant::ensure_app_globals(app);
-        app.set_global(crate::settings::AssistantSettings {
-            enabled: false,
-            ..Default::default()
-        });
-    }
-
-    #[gpui::test]
-    fn right_sidebar_does_not_render_outer_tab_title_or_tab_bar(cx: &mut gpui::TestAppContext) {
-        cx.update(|app| {
-            init_test_app(app);
-            app.set_global(crate::right_sidebar::RightSidebarState {
-                visible: true,
-                width: px(360.),
-                active_tab: crate::right_sidebar::RightSidebarTab::Assistant,
-            });
-        });
-
-        let (root, window_cx) = cx.add_window_view(|window, cx| {
-            let sidebar = cx.new(|cx| RightSidebarView::new(window, cx));
-            gpui_component::Root::new(sidebar, window, cx)
-        });
-
-        window_cx.draw(
-            point(px(0.), px(0.)),
-            size(
-                AvailableSpace::Definite(px(520.)),
-                AvailableSpace::Definite(px(240.)),
-            ),
-            move |_, _| div().size_full().child(root),
-        );
-        window_cx.run_until_parked();
-
-        assert!(
-            window_cx
-                .debug_bounds("termua-right-sidebar-active-tab-title")
-                .is_none(),
-            "expected right sidebar not to render an outer tab title"
-        );
-        assert!(
-            window_cx
-                .debug_bounds("termua-right-sidebar-tab-notifications")
-                .is_none(),
-            "expected right sidebar not to render the full tab bar"
-        );
-        assert!(
-            window_cx
-                .debug_bounds("termua-right-sidebar-tab-assistant")
-                .is_none(),
-            "expected right sidebar not to render the full tab bar"
-        );
     }
 }

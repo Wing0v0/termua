@@ -22,14 +22,12 @@ gpui.workspace = true
 gpui-component.workspace = true
 gpui-component-assets.workspace = true
 gpui_common.workspace = true
-termua_zeroclaw.workspace = true
 log.workspace = true
 gpui_dock = { path = "../crates/gpui_dock" }
 gpui_term = { path = "../crates/gpui_term" }
 gpui_sftp = { path = "../crates/gpui_sftp" }
 gpui_transfer = { path = "../crates/gpui_transfer" }
 menubar = { path = "../crates/menubar" }
-termua_relay.workspace = true
 smol.workspace = true
 rust-embed.workspace = true
 rustix.workspace = true

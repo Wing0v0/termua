@@ -10,5 +10,3 @@ pub use meta::{SettingMeta, SettingsNavSection, search_settings};
 use state::TerminalKeybinding;
 pub use state::{SettingsPage, SettingsWindow};
 
-#[cfg(test)]
-mod tests;

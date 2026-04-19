@@ -1,4 +1,3 @@
-pub mod assistant_panel;
 pub mod message_panel;
 pub mod right_sidebar;
 pub mod sessions_sidebar;

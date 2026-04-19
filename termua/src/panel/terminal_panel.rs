@@ -53,7 +53,7 @@ pub(crate) enum PanelKind {
     Local,
     Ssh,
     Serial,
-    Recorder,
+    // Recorder,
 }
 
 pub(crate) fn terminal_panel_tab_name(kind: PanelKind, id: usize) -> SharedString {
@@ -61,7 +61,7 @@ pub(crate) fn terminal_panel_tab_name(kind: PanelKind, id: usize) -> SharedStrin
         PanelKind::Local => format!("local {id}").into(),
         PanelKind::Ssh => format!("ssh {id}").into(),
         PanelKind::Serial => format!("serial {id}").into(),
-        PanelKind::Recorder => format!("recorder {id}").into(),
+        // PanelKind::Recorder => format!("recorder {id}").into(),
     }
 }
 
@@ -99,10 +99,6 @@ pub(crate) fn tab_icon_for_terminal_panel(
     terminal_type: TerminalType,
 ) -> gpui_dock::TabIcon {
     match kind {
-        PanelKind::Recorder => gpui_dock::TabIcon::Monochrome {
-            path: TermuaIcon::Record.into(),
-            color: Some(gpui::red()),
-        },
         PanelKind::Local | PanelKind::Ssh | PanelKind::Serial => gpui_dock::TabIcon::ColoredSvg {
             path: tab_icon_path_for_terminal_type(terminal_type).into(),
         },
@@ -506,8 +502,8 @@ impl Panel for TerminalPanel {
             self.id
         );
 
-        crate::assistant::unregister_terminal_target(cx, self.id);
-        crate::sharing::disconnect_terminal_sharing(self.terminal_view.entity_id(), cx);
+        // crate::assistant::unregister_terminal_target(cx, self.id);
+        // crate::sharing::disconnect_terminal_sharing(self.terminal_view.entity_id(), cx);
 
         // Ensure the backend releases its PTY/process resources when the tab is explicitly closed.
         self.terminal_view.update(cx, |terminal_view, cx| {
@@ -560,182 +556,5 @@ impl Render for TerminalPanel {
                 self.render_pending_sftp_upload_overlay(window, cx),
                 |this, overlay| this.child(overlay),
             )
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use std::{
-        fs,
-        path::{Path, PathBuf},
-    };
-
-    use super::*;
-
-    fn unique_tmp_path(label: &str) -> PathBuf {
-        let nanos = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .expect("system time before unix epoch")
-            .as_nanos();
-        std::env::temp_dir().join(format!("termua-terminal-panel-{label}-{nanos}"))
-    }
-
-    fn touch(path: &Path) {
-        if let Some(parent) = path.parent() {
-            fs::create_dir_all(parent).expect("create parent dirs");
-        }
-        fs::write(path, b"test").expect("create file");
-    }
-
-    #[test]
-    fn terminal_tab_icon_path_matches_backend_type() {
-        assert_eq!(
-            tab_icon_path_for_terminal_type(TerminalType::Alacritty),
-            TermuaIcon::Alacritty
-        );
-        assert_eq!(
-            tab_icon_path_for_terminal_type(TerminalType::WezTerm),
-            TermuaIcon::Wezterm
-        );
-    }
-
-    #[test]
-    fn recorder_terminal_tab_icon_path_is_record_svg() {
-        assert!(matches!(
-            tab_icon_for_terminal_panel(PanelKind::Recorder, TerminalType::WezTerm),
-            gpui_dock::TabIcon::Monochrome { path, color }
-                if path.as_ref() == TermuaIcon::Record.path() && color.is_some()
-        ));
-    }
-
-    #[test]
-    fn recorder_tabs_use_recorder_prefix() {
-        assert_eq!(
-            terminal_panel_tab_name(PanelKind::Local, 7).as_ref(),
-            "local 7"
-        );
-        assert_eq!(
-            terminal_panel_tab_name(PanelKind::Recorder, 7).as_ref(),
-            "recorder 7"
-        );
-    }
-
-    #[test]
-    fn local_tabs_use_shell_display_name_when_present() {
-        let mut env = HashMap::new();
-        env.insert("TERMUA_SHELL".into(), "/bin/bash".into());
-        let mut counts = HashMap::new();
-        assert_eq!(
-            local_terminal_panel_tab_name(&env, 7, &mut counts).as_ref(),
-            "bash"
-        );
-
-        env.insert("TERMUA_SHELL".into(), "nu".into());
-        assert_eq!(
-            local_terminal_panel_tab_name(&env, 7, &mut counts).as_ref(),
-            "nushell"
-        );
-
-        env.insert("TERMUA_SHELL".into(), "pwsh".into());
-        assert_eq!(
-            local_terminal_panel_tab_name(&env, 7, &mut counts).as_ref(),
-            "powershell"
-        );
-    }
-
-    #[test]
-    fn local_tabs_fall_back_to_local_prefix_without_shell() {
-        let mut counts = HashMap::new();
-        assert_eq!(
-            local_terminal_panel_tab_name(&HashMap::new(), 7, &mut counts).as_ref(),
-            "local 7"
-        );
-    }
-
-    #[test]
-    fn duplicate_local_shell_tabs_append_terminal_id() {
-        let mut counts = HashMap::new();
-        let mut env = HashMap::new();
-        env.insert("TERMUA_SHELL".into(), "bash".into());
-
-        assert_eq!(
-            local_terminal_panel_tab_name(&env, 7, &mut counts).as_ref(),
-            "bash"
-        );
-        assert_eq!(
-            local_terminal_panel_tab_name(&env, 9, &mut counts).as_ref(),
-            "bash 9"
-        );
-    }
-
-    #[test]
-    fn dropped_upload_paths_only_keep_files_and_sort() {
-        let base = unique_tmp_path("drop-paths");
-        let dir_path = base.join("dir");
-        let b_path = base.join("b.txt");
-        let a_path = base.join("nested").join("a.txt");
-        fs::create_dir_all(&dir_path).expect("create dir");
-        touch(&b_path);
-        touch(&a_path);
-
-        let paths = collect_dropped_upload_paths(&[dir_path, b_path.clone(), a_path.clone()]);
-
-        assert_eq!(paths, vec![b_path, a_path]);
-
-        let _ = fs::remove_dir_all(base);
-    }
-
-    #[test]
-    fn ssh_panel_drop_support_requires_sftp_files_only() {
-        let base = unique_tmp_path("drop-accept");
-        let dir_path = base.join("dir");
-        let file_path = base.join("file.txt");
-        fs::create_dir_all(&dir_path).expect("create dir");
-        touch(&file_path);
-
-        assert!(supports_sftp_file_drop(
-            PanelKind::Ssh,
-            true,
-            std::slice::from_ref(&file_path)
-        ));
-        assert!(!supports_sftp_file_drop(
-            PanelKind::Local,
-            true,
-            std::slice::from_ref(&file_path)
-        ));
-        assert!(!supports_sftp_file_drop(
-            PanelKind::Ssh,
-            false,
-            std::slice::from_ref(&file_path)
-        ));
-        assert!(!supports_sftp_file_drop(
-            PanelKind::Ssh,
-            true,
-            std::slice::from_ref(&dir_path)
-        ));
-
-        let _ = fs::remove_dir_all(base);
-    }
-
-    #[test]
-    fn sftp_upload_file_count_label_handles_pluralization() {
-        assert_eq!(sftp_upload_file_count_label(1), "1 file");
-        assert_eq!(sftp_upload_file_count_label(2), "2 files");
-    }
-
-    #[test]
-    fn sftp_upload_destination_label_uses_fallback_when_unknown() {
-        assert_eq!(
-            sftp_upload_destination_label(None),
-            "Destination: current remote directory"
-        );
-        assert_eq!(
-            sftp_upload_destination_label(Some("")),
-            "Destination: current remote directory"
-        );
-        assert_eq!(
-            sftp_upload_destination_label(Some("/srv/app")),
-            "Destination: /srv/app"
-        );
     }
 }

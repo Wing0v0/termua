@@ -96,13 +96,7 @@ impl Render for TermuaWindow {
             // via `window.dispatch_action`, so calling `WindowHandle::update` from an app-level
             // `cx.on_action` handler can fail due to re-entrancy).
             .on_action(cx.listener(Self::on_new_local_terminal))
-            .on_action(cx.listener(Self::on_play_cast))
             .on_action(cx.listener(Self::on_open_sftp))
-            .on_action(cx.listener(Self::on_start_sharing))
-            .on_action(cx.listener(Self::on_stop_sharing))
-            .on_action(cx.listener(Self::on_request_control))
-            .on_action(cx.listener(Self::on_release_control))
-            .on_action(cx.listener(Self::on_revoke_control))
             .child(MenubarTitleBar::build(window, cx))
             .child(center)
             .child(self.footbar.clone())

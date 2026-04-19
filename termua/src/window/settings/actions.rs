@@ -35,39 +35,6 @@ impl SettingsWindow {
         });
     }
 
-    fn sync_assistant_placeholders(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        Self::sync_input_placeholders(
-            window,
-            cx,
-            &[
-                (
-                    self.assistant_temperature_input.clone(),
-                    t!("Settings.Assistant.TemperaturePlaceholder").to_string(),
-                ),
-                (
-                    self.assistant_api_url_input.clone(),
-                    t!("Settings.Assistant.ApiUrlPlaceholder").to_string(),
-                ),
-                (
-                    self.assistant_api_path_input.clone(),
-                    t!("Settings.Assistant.ApiPathPlaceholder").to_string(),
-                ),
-                (
-                    self.assistant_provider_timeout_input.clone(),
-                    t!("Settings.Assistant.TimeoutPlaceholder").to_string(),
-                ),
-                (
-                    self.assistant_extra_headers_input.clone(),
-                    t!("Settings.Assistant.ExtraHeadersPlaceholder").to_string(),
-                ),
-                (
-                    self.assistant_api_key_input.clone(),
-                    t!("Settings.Assistant.ApiKeyPlaceholder").to_string(),
-                ),
-            ],
-        );
-    }
-
     pub(super) fn sync_localized_strings(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         window.set_window_title(t!("Settings.WindowTitle").as_ref());
 
@@ -85,13 +52,8 @@ impl SettingsWindow {
                     self.logging_path_input.clone(),
                     t!("Settings.Logging.PathPlaceholder").to_string(),
                 ),
-                (
-                    self.sharing_relay_url_input.clone(),
-                    t!("Settings.Sharing.RelayUrlPlaceholder").to_string(),
-                ),
             ],
         );
-        self.sync_assistant_placeholders(window, cx);
 
         let nav_tree_items = build_nav_tree_items();
         self.nav_tree_items = nav_tree_items.clone();

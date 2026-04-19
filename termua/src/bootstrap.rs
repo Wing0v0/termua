@@ -17,7 +17,6 @@ fn init_app(cx: &mut App, settings: &crate::settings::SettingsFile) {
     menubar::init(cx);
     gpui_term::init(cx);
     gpui_dock::init(cx);
-    crate::panel::assistant_panel::bind_keybindings(cx);
 
     match crate::command_history::CommandHistory::load_default() {
         Ok(history) => {
@@ -57,8 +56,6 @@ fn init_app(cx: &mut App, settings: &crate::settings::SettingsFile) {
     cx.set_global(TermuaAppState::default());
     cx.set_global(crate::notification::NotifyState::default());
     cx.set_global(crate::right_sidebar::RightSidebarState::default());
-    crate::assistant::ensure_app_globals(cx);
-    crate::sharing::init_globals(cx);
     cx.set_global(TransferCenterState::default());
 
     cx.activate(true);
